@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SOIT At-Risk Dashboard</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <div class="brand">
+        <div class="logo">SR</div>
+        <div class="brand__text">
+          <h1>SOIT At-Risk Dashboard</h1>
+          <p class="muted">Upload your Excel file to get clear, quick insights.</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button id="themeToggle" class="btn btn-outline" aria-label="Toggle theme">Dark mode</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card card--pad-lg">
+      <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="upload">
+        <label for="file" class="upload__label">Choose Excel file (.xlsx or .xls)</label>
+        <div class="upload__row">
+          <input type="file" id="file" name="file" accept=".xlsx,.xls" required>
+          <button type="submit" class="btn">Analyze</button>
+        </div>
+        {% if filename %}
+        <p class="muted tiny">Last uploaded: <strong>{{ filename }}</strong></p>
+        {% endif %}
+      </form>
+      {% if error %}
+      <div class="alert alert--error">{{ error }}</div>
+      {% endif %}
+    </section>
+
+    {% if report %}
+    <!-- Filters -->
+    <section class="card">
+      <div class="filters">
+        <div class="filters__group">
+          <label for="weekFilter">Week</label>
+          <select id="weekFilter">
+            <option value="">All weeks</option>
+            {% for w in report.weeks %}<option value="{{ w }}">{{ w }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <label for="qualFilter">Qualification</label>
+          <select id="qualFilter">
+            <option value="">All qualifications</option>
+            {% for q in report.qualifications %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <label for="moduleScope">Modules</label>
+          <select id="moduleScope" title="Pick how to show modules">
+            <option value="all">All modules (all reasons)</option>
+            <option value="top3_att">Top 3 (non-attendance)</option>
+            <option value="top5_att">Top 5 (non-attendance)</option>
+            <option value="top10_att">Top 10 (non-attendance)</option>
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <label for="moduleBasis">Basis</label>
+          <select id="moduleBasis" title="Which data to use for the module chart">
+            <option value="all">All reasons</option>
+            <option value="attendance">Non-attendance only</option>
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <button id="applyFilters" class="btn btn-outline">Apply filters</button>
+          <button id="resetFilters" class="btn btn-outline">Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metrics -->
+    <section class="grid grid-3">
+      <div class="metric card">
+        <div class="metric__title">Total records</div>
+        <div class="metric__value">{{ report.total_records }}</div>
+      </div>
+      <div class="metric card">
+        <div class="metric__title">Unique students</div>
+        <div class="metric__value">{{ report.unique_students or "N/A" }}</div>
+      </div>
+      <div class="metric card">
+        <div class="metric__title">Data quality</div>
+        <div class="metric__value">
+          {% if report.risk_counts and report.sample_rows %}Good{% else %}Limited{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="grid grid-2">
+      <div class="card" id="riskCard">
+        <h3 class="card__title">Risk level breakdown</h3>
+        <div class="chart h-260"><canvas id="riskChart"></canvas></div>
+      </div>
+      <div class="card" id="reasonCard">
+        <h3 class="card__title">Top reasons</h3>
+        <div class="chart h-260"><canvas id="reasonChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid grid-2">
+      <div class="card">
+        <h3 class="card__title">Modules (unique students)</h3>
+        <div class="chart" id="moduleChartWrap"><canvas id="moduleChart"></canvas></div>
+      </div>
+      <div class="card" id="resolvedCard">
+        <h3 class="card__title">Resolved status</h3>
+        <div class="chart h-260"><canvas id="resolvedChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid grid-2">
+      <div class="card" id="weekRiskCard">
+        <h3 class="card__title">Weekly trend by risk level</h3>
+        <div class="chart h-300"><canvas id="weekRiskChart"></canvas></div>
+      </div>
+      <div class="card" id="nonAttendanceCard">
+        <h3 class="card__title">Non-attendance trend by week</h3>
+        <div class="chart h-300"><canvas id="nonAttendanceChart"></canvas></div>
+      </div>
+    </section>
+
+    {% if report.resolved_rate and report.resolved_rate|length > 0 %}
+    <section class="card" id="resolvedRateCard">
+      <h3 class="card__title">Resolved rate by week (%)</h3>
+      <div class="chart h-300"><canvas id="resolvedRateChart"></canvas></div>
+    </section>
+    {% endif %}
+
+    <!-- ====================== Student Analysis ====================== -->
+    {% if report.student_enabled %}
+    <section class="card">
+      <h3 class="card__title">Student analysis</h3>
+
+      <div class="filters">
+        <div class="filters__group" style="min-width:260px;">
+          <label for="studentSearch">Find student</label>
+          <input id="studentSearch" list="studentsList" placeholder="Type ID or name" style="padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);color:var(--text);width:100%;">
+          <datalist id="studentsList">
+            {% for s in report.student_lookup %}
+            <option value="{{ s.label }}"></option>
+            {% endfor %}
+          </datalist>
+        </div>
+
+        <div class="filters__group">
+          <label for="topModuleSelect">Top students for module</label>
+          <select id="topModuleSelect">
+            <option value="">All modules</option>
+            {% for m in report.modules %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <label for="topQualSelect">Qualification</label>
+          <select id="topQualSelect">
+            <option value="">All qualifications</option>
+            {% for q in report.qualifications %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <label for="topNStudent">Show</label>
+          <select id="topNStudent">
+            <option value="5">Top 5</option>
+            <option value="10" selected>Top 10</option>
+            <option value="20">Top 20</option>
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <button id="renderTopList" class="btn btn-outline">Refresh list</button>
+          <button id="analyzeStudentBtn" class="btn">Analyze selected student</button>
+        </div>
+      </div>
+
+      <div id="topStudentList" class="muted tiny" style="margin-top:8px;"></div>
+      <p id="studentSelectedNote" class="muted tiny" style="margin-top:6px;"></p>
+    </section>
+
+    <section class="grid grid-2" id="studentCharts">
+      <div class="card" id="stuModAttCard">
+        <h3 class="card__title">Student non-attendance by module</h3>
+        <div class="chart" id="stuModAttWrap"><canvas id="stuModAttChart"></canvas></div>
+      </div>
+      <div class="card" id="stuWeekAttCard">
+        <h3 class="card__title">Student non-attendance by week</h3>
+        <div class="chart h-300"><canvas id="stuWeekAttChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid grid-2">
+      <div class="card" id="stuWeekRiskCard">
+        <h3 class="card__title">Student risk by week</h3>
+        <div class="chart h-300"><canvas id="stuWeekRiskChart"></canvas></div>
+      </div>
+      <div class="card" id="stuRiskModuleCard">
+        <h3 class="card__title">Risk by module (max severity)</h3>
+        <div id="stuRiskModuleTable" class="table-wrapper"></div>
+      </div>
+    </section>
+    {% endif %}
+    <!-- ==================== end Student Analysis ==================== -->
+
+    {% if report.repeated_students and report.repeated_students.top_counts %}
+    <section class="card">
+      <div class="card__header">
+        <h3 class="card__title">Students flagged multiple times</h3>
+        <span class="muted tiny">Top 50 by count</span>
+      </div>
+      <details class="details">
+        <summary class="details__summary">Show preview rows</summary>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                {% set headers = report.repeated_students.preview_rows[0].keys() %}
+                {% for h in headers %}<th>{{ h }}</th>{% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.repeated_students.preview_rows %}
+              <tr>
+                {% for h in headers %}<td>{{ row[h] }}</td>{% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <h3 class="card__title">Sample rows</h3>
+      <p class="muted tiny">First 50 rows to sanity check the dataset.</p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            {% set sample_headers = report.sample_rows[0].keys() %}
+            <tr>
+              {% for h in sample_headers %}<th>{{ h }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.sample_rows %}
+            <tr>
+              {% for h in sample_headers %}<td>{{ row[h] }}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p class="muted tiny">Powered by Pasca Ragophala.</p>
+    </div>
+  </footer>
+
+  {% if report %}
+  <script>window.__REPORT__ = {{ report | tojson }};</script>
+  {% endif %}
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
