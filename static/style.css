@@ -121,3 +121,15 @@ tbody tr:nth-child(odd) { background: color-mix(in hsl, var(--panel) 94%, #fffff
 
 /* Remove global canvas auto-height (prevents giant charts) */
 canvas { display: block; max-width: 100%; }
+
+.pills { display:flex; gap:8px; flex-wrap:wrap; }
+.pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:12px;
+  background: var(--panel-2); border:1px solid var(--border); color: var(--text); }
+
+.hm-0 { background: color-mix(in hsl, #ffffff 90%, transparent); }
+.hm-1 { background: color-mix(in hsl, #ef4444 25%, transparent); }
+.hm-2 { background: color-mix(in hsl, #ef4444 45%, transparent); }
+.hm-3 { background: color-mix(in hsl, #ef4444 65%, transparent); }
+.hm-4, .hm-5, .hm-6, .hm-7, .hm-8, .hm-9 { background: color-mix(in hsl, #ef4444 85%, transparent); }
+.hm-cell { text-align:center; font-weight:600; }
+
