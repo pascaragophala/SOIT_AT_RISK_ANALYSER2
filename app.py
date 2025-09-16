@@ -348,92 +348,91 @@ def build_report(df: pd.DataFrame):
 
     
     # NEW: per-student, per-module, per-week non-attendance counts (for heatmap)
+    
+    # NEW: per-student, per-module, per-week non-attendance counts (for heatmap)
     ps_week_module_att = {}
-    try:
-        if att_mask is not None and col_module and col_week and col_student:
-            grp = df[att_mask].groupby([col_student, col_module, col_week]).size()
-            for (sid_raw, mod, wk), v in grp.items():
-                sid = _sid(sid_raw)
-                ps_week_module_att.setdefault(sid, {}).setdefault(str(mod), {})[str(wk)] = int(v)
-    except Exception:
-        ps_week_module_att = {}
-return {
+    if att_mask is not None and col_module and col_week and col_student:
+        grp = df[att_mask].groupby([col_student, col_module, col_week]).size()
+        for (sid_raw, mod, wk), v in grp.items():
+            sid = _sid(sid_raw)
+            ps_week_module_att.setdefault(sid, {}).setdefault(str(mod), {})[str(wk)] = int(v)
+    return {
         "total_records": total_records,
-        "unique_students": unique_students,
-        "risk_counts": risk_counts,
-        "resolved_counts": resolved_counts,
-        "by_reason": by_reason,
-        "by_module": by_module,
-        "by_module_attendance": by_module_att,
-        "by_week_attendance": by_week_att,
-        "by_week_module_all": by_week_module_all,
-        "by_week_module_attendance": by_week_module_att,
-        "weeks": weeks,
-        "modules": modules,
-        "qualifications": quals,
-        "week_risk": week_risk,
-        "resolved_rate": resolved_rate,
-        "repeated_students": repeated_students,
-        "sample_rows": sample_rows,
-        # qualification slices
-        "by_module_all_by_qual": by_module_all_by_qual,
-        "by_module_att_by_qual": by_module_att_by_qual,
-        "by_week_module_all_by_qual": by_week_module_all_by_qual,
-        "by_week_module_att_by_qual": by_week_module_att_by_qual,
-        # student analytics
-        "student_enabled": bool(col_student),
-        "student_lookup": student_lookup,
-        "ps_modules_att": ps_modules_att,
-        "ps_weeks_att": ps_weeks_att,
-        "ps_week_module_att": ps_week_module_att,
-        "ps_risk_module_max": ps_risk_module_max,
-        "ps_week_risk_counts": ps_week_risk_counts,
-        "module_top_students_att": module_top_students_att,
-        "global_top_students_att": global_top_students_att,
-        "module_top_students_att_by_qual": module_top_students_att_by_qual,
-        "global_top_students_att_by_qual": global_top_students_att_by_qual,
-    }
+            "unique_students": unique_students,
+            "risk_counts": risk_counts,
+            "resolved_counts": resolved_counts,
+            "by_reason": by_reason,
+            "by_module": by_module,
+            "by_module_attendance": by_module_att,
+            "by_week_attendance": by_week_att,
+            "by_week_module_all": by_week_module_all,
+            "by_week_module_attendance": by_week_module_att,
+            "weeks": weeks,
+            "modules": modules,
+            "qualifications": quals,
+            "week_risk": week_risk,
+            "resolved_rate": resolved_rate,
+            "repeated_students": repeated_students,
+            "sample_rows": sample_rows,
+            # qualification slices
+            "by_module_all_by_qual": by_module_all_by_qual,
+            "by_module_att_by_qual": by_module_att_by_qual,
+            "by_week_module_all_by_qual": by_week_module_all_by_qual,
+            "by_week_module_att_by_qual": by_week_module_att_by_qual,
+            # student analytics
+            "student_enabled": bool(col_student),
+            "student_lookup": student_lookup,
+            "ps_modules_att": ps_modules_att,
+            "ps_weeks_att": ps_weeks_att,
+            "ps_week_module_att": ps_week_module_att,
+            "ps_risk_module_max": ps_risk_module_max,
+            "ps_week_risk_counts": ps_week_risk_counts,
+            "module_top_students_att": module_top_students_att,
+            "global_top_students_att": global_top_students_att,
+            "module_top_students_att_by_qual": module_top_students_att_by_qual,
+            "global_top_students_att_by_qual": global_top_students_att_by_qual,
+        }
 
-def create_app():
-    app = Flask(__name__)
+    def create_app():
+        app = Flask(__name__)
 
-    @app.route("/", methods=["GET"])
-    def index():
-        return render_template("index.html", report=None, error=None, filename=None)
+        @app.route("/", methods=["GET"])
+        def index():
+            return render_template("index.html", report=None, error=None, filename=None)
 
-    @app.route("/upload", methods=["POST"])
-    def upload():
-        if "file" not in request.files:
-            return render_template("index.html", report=None, error="No file part.", filename=None)
-        file = request.files["file"]
-        if file.filename == "":
-            return render_template("index.html", report=None, error="No file selected.", filename=None)
-        if not allowed_file(file.filename):
-            return render_template("index.html", report=None, error="Please upload an Excel file (.xlsx or .xls).", filename=None)
+        @app.route("/upload", methods=["POST"])
+        def upload():
+            if "file" not in request.files:
+                return render_template("index.html", report=None, error="No file part.", filename=None)
+            file = request.files["file"]
+            if file.filename == "":
+                return render_template("index.html", report=None, error="No file selected.", filename=None)
+            if not allowed_file(file.filename):
+                return render_template("index.html", report=None, error="Please upload an Excel file (.xlsx or .xls).", filename=None)
 
-        filename = secure_filename(file.filename)
-        try:
-            data = BytesIO(file.read())
+            filename = secure_filename(file.filename)
             try:
-                df = pd.read_excel(data)
-            except Exception:
-                data.seek(0)
-                xl = pd.ExcelFile(data)
-                df = pd.read_excel(xl, sheet_name=xl.sheet_names[0])
+                data = BytesIO(file.read())
+                try:
+                    df = pd.read_excel(data)
+                except Exception:
+                    data.seek(0)
+                    xl = pd.ExcelFile(data)
+                    df = pd.read_excel(xl, sheet_name=xl.sheet_names[0])
 
-            report = build_report(df)
-            return render_template("index.html", report=report, error=None, filename=filename)
-        except Exception as e:
-            return render_template("index.html", report=None, error=f"Failed to analyze file: {e}", filename=None)
+                report = build_report(df)
+                return render_template("index.html", report=report, error=None, filename=filename)
+            except Exception as e:
+                return render_template("index.html", report=None, error=f"Failed to analyze file: {e}", filename=None)
 
-    @app.route("/api/ping")
-    def ping():
-        return jsonify({"ok": True})
+        @app.route("/api/ping")
+        def ping():
+            return jsonify({"ok": True})
 
-    return app
+        return app
 
-app = create_app()
+    app = create_app()
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port)
+    if __name__ == "__main__":
+        port = int(os.environ.get("PORT", "5000"))
+        app.run(host="0.0.0.0", port=port)
