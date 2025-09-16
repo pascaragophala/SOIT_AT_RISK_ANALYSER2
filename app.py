@@ -346,7 +346,18 @@ def build_report(df: pd.DataFrame):
 
     sample_rows = df.head(50).fillna("").astype(str).to_dict(orient="records")
 
-    return {
+    
+    # NEW: per-student, per-module, per-week non-attendance counts (for heatmap)
+    ps_week_module_att = {}
+    try:
+        if att_mask is not None and col_module and col_week and col_student:
+            grp = df[att_mask].groupby([col_student, col_module, col_week]).size()
+            for (sid_raw, mod, wk), v in grp.items():
+                sid = _sid(sid_raw)
+                ps_week_module_att.setdefault(sid, {}).setdefault(str(mod), {})[str(wk)] = int(v)
+    except Exception:
+        ps_week_module_att = {}
+return {
         "total_records": total_records,
         "unique_students": unique_students,
         "risk_counts": risk_counts,
@@ -374,6 +385,7 @@ def build_report(df: pd.DataFrame):
         "student_lookup": student_lookup,
         "ps_modules_att": ps_modules_att,
         "ps_weeks_att": ps_weeks_att,
+        "ps_week_module_att": ps_week_module_att,
         "ps_risk_module_max": ps_risk_module_max,
         "ps_week_risk_counts": ps_week_risk_counts,
         "module_top_students_att": module_top_students_att,
