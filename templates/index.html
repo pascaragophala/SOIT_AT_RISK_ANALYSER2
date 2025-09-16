@@ -87,6 +87,11 @@
       </div>
     </section>
 
+    <!-- Active filter summary -->
+    <section class="card" id="activeFilterCard">
+      <div class="muted tiny" id="activeFilters">No filters applied.</div>
+    </section>
+
     <!-- Metrics -->
     <section class="grid grid-3">
       <div class="metric card">
@@ -193,6 +198,19 @@
         </div>
       </div>
 
+      <div class="filters">
+        <div class="filters__group">
+          <label for="stuModuleForHeatmap">Module for heatmap</label>
+          <select id="stuModuleForHeatmap">
+            <option value="">Pick after selecting a student…</option>
+          </select>
+        </div>
+        <div class="filters__group">
+          <label>&nbsp;</label>
+          <button id="renderStudentHeatmap" class="btn btn-outline">Render heatmap</button>
+        </div>
+      </div>
+
       <div id="topStudentList" class="muted tiny" style="margin-top:8px;"></div>
       <p id="studentSelectedNote" class="muted tiny" style="margin-top:6px;"></p>
     </section>
@@ -217,6 +235,12 @@
         <h3 class="card__title">Risk by module (max severity)</h3>
         <div id="stuRiskModuleTable" class="table-wrapper"></div>
       </div>
+    </section>
+
+    <section class="card" id="stuHeatmapCard">
+      <h3 class="card__title">Week heatmap (absences)</h3>
+      <p class="muted tiny">Red = absent counts in that week for this module. 0 = none.</p>
+      <div class="table-wrapper" id="stuHeatmapWrap"></div>
     </section>
     {% endif %}
     <!-- ==================== end Student Analysis ==================== -->
