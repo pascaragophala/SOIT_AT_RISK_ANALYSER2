@@ -192,7 +192,6 @@
           </select>
         </div>
 
-        <!-- NEW: basis & band -->
         <div class="filters__group">
           <label for="topBasis">Basis</label>
           <select id="topBasis" title="How to select the top students">
@@ -217,6 +216,7 @@
         </div>
       </div>
 
+      <!-- legacy heatmap control (kept) -->
       <div class="filters">
         <div class="filters__group">
           <label for="stuModuleForHeatmap">Module for heatmap</label>
@@ -256,16 +256,38 @@
       </div>
     </section>
 
-    <!-- NEW: student modules summary table -->
+    <!-- Student modules summary -->
     <section class="card" id="stuModSummaryCard">
       <h3 class="card__title">Student modules summary</h3>
       <p class="muted tiny">Per-module totals and absence rate (%) for the selected student.</p>
       <div class="table-wrapper" id="stuModSummaryWrap"></div>
     </section>
 
+    <!-- Week heatmap with multi-module support -->
     <section class="card" id="stuHeatmapCard">
-      <h3 class="card__title">Week heatmap (absences)</h3>
+      <div class="card__header" style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;flex-wrap:wrap;">
+        <h3 class="card__title">Week heatmap (absences)</h3>
+        <div class="filters" style="margin:0;">
+          <div class="filters__group" style="min-width:260px;">
+            <label for="hmModule">Modules (pick 1–3 or All)</label>
+            <select id="hmModule" multiple size="4" title="Pick up to 3 modules"></select>
+          </div>
+          <div class="filters__group">
+            <label for="hmFrom">From</label>
+            <select id="hmFrom"><option value="">Auto</option></select>
+          </div>
+          <div class="filters__group">
+            <label for="hmTo">To</label>
+            <select id="hmTo"><option value="">Auto</option></select>
+          </div>
+          <div class="filters__group">
+            <label>&nbsp;</label>
+            <button id="hmRender" class="btn btn-outline">Render</button>
+          </div>
+        </div>
+      </div>
       <p class="muted tiny">Red = absent counts in that week for this module. 0 = none.</p>
+      <p class="muted tiny">Legend: <span class="pill hm-legend hm-1">Low</span> <span class="pill hm-legend hm-2">Moderate</span> <span class="pill hm-legend hm-4">High</span></p>
       <div class="table-wrapper" id="stuHeatmapWrap"></div>
     </section>
     {% endif %}
@@ -333,7 +355,6 @@
   {% if report %}
   <script>window.__REPORT__ = {{ report | tojson }};</script>
   {% endif %}
-  <!-- Addon must load BEFORE app.js so it can render chip list etc. -->
   <script src="{{ url_for('static', filename='heatmap-addon.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
