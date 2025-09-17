@@ -1,4 +1,3 @@
-// static/heatmap-addon.js
 (function () {
   const report = window.__REPORT__ || {};
   if (!report || !report.student_enabled) return;
@@ -7,11 +6,21 @@
   const studentSearch = document.getElementById("studentSearch");
   const analyzeStudentBtn = document.getElementById("analyzeStudentBtn");
   const studentSelectedNote = document.getElementById("studentSelectedNote");
+
+  // legacy top heatmap
   const stuModuleForHeatmap = document.getElementById("stuModuleForHeatmap");
   const renderStudentHeatmapBtn = document.getElementById("renderStudentHeatmap");
+
+  // inline multi-module heatmap
+  const hmModule = document.getElementById("hmModule"); // MULTI
+  const hmFrom = document.getElementById("hmFrom");
+  const hmTo = document.getElementById("hmTo");
+  const hmRender = document.getElementById("hmRender");
+
   const stuHeatmapWrap = document.getElementById("stuHeatmapWrap");
   const stuModSummaryWrap = document.getElementById("stuModSummaryWrap");
 
+  // top list filters (kept)
   const topModuleSelect = document.getElementById("topModuleSelect");
   const topQualSelect = document.getElementById("topQualSelect");
   const topNStudent = document.getElementById("topNStudent");
@@ -21,13 +30,14 @@
   const topStudentList = document.getElementById("topStudentList");
 
   // ------- helpers -------
+  const ALL_WEEKS = sortedWeeks(report.weeks || []);
+
   function normalizeId(input) {
     if (!input) return "";
     const s = String(input).trim();
     const m = s.match(/^\s*(\d{5,})\b/);
     return m ? m[1] : s;
   }
-
   function sortedWeeks(weeks) {
     const ws = (weeks || []).map(String);
     const items = ws.map(w => {
@@ -37,72 +47,108 @@
     items.sort((a, b) => a.n - b.n || a.w.localeCompare(b.w));
     return items.map(x => x.w);
   }
-
   const labelToId = {};
   (report.student_lookup || []).forEach(s => {
     if (s && s.label) labelToId[s.label] = s.id || normalizeId(s.label);
   });
-
   function sidFromInput() {
     const typed = studentSearch?.value || "";
     return labelToId[typed] || normalizeId(typed);
   }
 
-  // ---- heatmap + module options ----
-  function fillHeatmapModuleOptions(sid) {
+  // ---- options fill ----
+  function fillModuleSelectForStudent(selectEl, sid, multi = false) {
     const modMap = (report.ps_week_module_att && report.ps_week_module_att[sid]) || {};
     const mods = Object.keys(modMap).sort((a, b) => a.localeCompare(b));
     if (!mods.length) {
-      if (stuModuleForHeatmap) {
-        stuModuleForHeatmap.innerHTML = `<option value="">No module data for this student</option>`;
-      }
+      selectEl.innerHTML = `<option value="">No module data for this student</option>`;
       return null;
     }
-    if (stuModuleForHeatmap) {
-      stuModuleForHeatmap.innerHTML =
+    if (multi) {
+      selectEl.innerHTML =
+        `<option value="__ALL__">(All modules)</option>` +
+        mods.map(m => `<option value="${m}">${m}</option>`).join("");
+    } else {
+      selectEl.innerHTML =
         `<option value="">Select a module…</option>` +
         mods.map(m => `<option value="${m}">${m}</option>`).join("");
     }
     return mods[0];
   }
 
-  function renderStudentHeatmap(sid, moduleName) {
-    if (!stuHeatmapWrap) return;
-    const modMap = (report.ps_week_module_att && report.ps_week_module_att[sid]) || {};
-    const wkMap = modMap[moduleName] || {};
-    const weeks = sortedWeeks(Object.keys(wkMap || {}));
+  function fillWeeks(selectEl) {
+    selectEl.innerHTML = `<option value="">Auto</option>` +
+      ALL_WEEKS.map(w => `<option value="${w}">${w}</option>`).join("");
+  }
 
-    if (!moduleName) {
-      stuHeatmapWrap.innerHTML = `<p class="muted tiny">Pick a module to render the heatmap.</p>`;
+  // ---- heatmap render (multi-row) ----
+  function renderStudentHeatmapRows(sid, modules, wStart, wEnd) {
+    if (!stuHeatmapWrap) return;
+    const modMapAll = (report.ps_week_module_att && report.ps_week_module_att[sid]) || {};
+
+    if (!modules || !modules.length) {
+      stuHeatmapWrap.innerHTML = `<p class="muted tiny">Pick at least one module.</p>`;
       return;
     }
-    if (!Object.keys(wkMap).length) {
-      stuHeatmapWrap.innerHTML = `<p class="muted tiny">No non-attendance recorded for <strong>${moduleName}</strong> for this student.</p>`;
+
+    // build columns from overall weeks (to align rows), then apply range
+    let weeks = ALL_WEEKS.slice();
+    if (wStart || wEnd) {
+      const startN = wStart ? parseInt((String(wStart).match(/\d+/) || ["0"])[0], 10) : -Infinity;
+      const endN   = wEnd   ? parseInt((String(wEnd).match(/\d+/) || ["0"])[0], 10) : Infinity;
+      weeks = weeks.filter(w => {
+        const n = parseInt((w.match(/\d+/) || ["0"])[0], 10);
+        return n >= startN && n <= endN;
+      });
+    }
+    if (!weeks.length) {
+      stuHeatmapWrap.innerHTML = `<p class="muted tiny">No weeks in the selected range.</p>`;
       return;
     }
-    const cells = weeks.map(w => {
-      const v = Number(wkMap[w] || 0);
-      const cls = `hm-cell hm-${Math.max(0, Math.min(9, v))}`;
-      return `<td class="${cls}" title="Week ${w}: ${v}">${v}</td>`;
-    }).join("");
 
     const head = weeks.map(w => {
       const shortW = (w.match(/\d+/) || [""])[0] || w;
       return `<th>W${shortW}</th>`;
     }).join("");
 
+    const bodyRows = modules.map(mod => {
+      const wkMap = modMapAll[mod] || {};
+      const tds = weeks.map(w => {
+        const v = Number(wkMap[w] || 0);
+        let bucket = 0;
+        if (v >= 3) bucket = 4; else if (v === 2) bucket = 2; else if (v === 1) bucket = 1;
+        return `<td class="hm-cell hm-${bucket}" title="${mod} — ${w}: ${v}">${v}</td>`;
+      }).join("");
+      return `<tr><td><strong>${mod}</strong></td>${tds}</tr>`;
+    }).join("");
+
     stuHeatmapWrap.innerHTML = `
       <table>
         <thead><tr><th>Module</th>${head}</tr></thead>
-        <tbody><tr><td><strong>${moduleName}</strong></td>${cells}</tr></tbody>
+        <tbody>${bodyRows}</tbody>
       </table>
     `;
   }
 
-  // ---- student module summary table (uses back-end rates) ----
+  // ---- student module summary ----
+  function computeSummaryLocally(sid) {
+    const rows = [];
+    const modMap = (report.ps_week_module_att && report.ps_week_module_att[sid]) || {};
+    const capacity = report.module_week_capacity || {};
+    (Object.keys(modMap)).forEach(mod => {
+      const wkMap = modMap[mod] || {};
+      const total = Object.values(wkMap).reduce((a, b) => a + Number(b || 0), 0);
+      const caps = capacity[mod] || {};
+      const denom = (report.weeks || []).reduce((s, w) => s + Number(caps[String(w)] || 0), 0);
+      const rate = denom ? Math.round((total / denom) * 1000) / 10 : 0;
+      rows.push({ module: mod, total_absences: total, rate });
+    });
+    return rows;
+  }
   function renderStudentModuleSummary(sid) {
     if (!stuModSummaryWrap) return;
-    const rows = (report.student_module_summary && report.student_module_summary[sid]) || [];
+    let rows = (report.student_module_summary && report.student_module_summary[sid]) || [];
+    if (!rows || !rows.length) rows = computeSummaryLocally(sid);
     if (!rows.length) {
       stuModSummaryWrap.innerHTML = `<p class="muted tiny">No module summary available for this student.</p>`;
       return;
@@ -120,7 +166,7 @@
     stuModSummaryWrap.innerHTML = html;
   }
 
-  // ---- top list rendering with qualification / basis / band ----
+  // ---- top-list rendering (unchanged logic, shows Absences only on the chip) ----
   function inBand(rate, band) {
     if (!band) return true;
     const r = Number(rate || 0);
@@ -129,7 +175,6 @@
     if (band === "high") return r >= 70;
     return true;
   }
-
   function topStudentsData() {
     const base = (report.global_top_students_att || []).slice();
     const mod = topModuleSelect?.value || "";
@@ -141,7 +186,6 @@
     }
     return base;
   }
-
   function renderTopList() {
     if (!topStudentList) return;
     const n = parseInt(topNStudent?.value || "10", 10);
@@ -150,24 +194,16 @@
     const qual = (topQualSelect?.value || "").trim();
 
     let arr = topStudentsData();
-
-    // filter by qual if chosen
     if (qual) {
-      const rx = new RegExp(`\\[${qual.replace(/[.*+?^${}()|[\]\\\\]/g, "\\$&")}\\]`);
+      const rx = new RegExp(`\\[${qual.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\]`);
       arr = arr.filter(x => (x.qual && x.qual === qual) || rx.test(x.label || ""));
     }
-
-    // filter by rate band
     arr = arr.filter(x => inBand(x.rate, band));
-
-    // sort by basis
     arr.sort((a, b) => {
       const av = basis === "rate" ? Number(a.rate) : Number(a.count);
       const bv = basis === "rate" ? Number(b.rate) : Number(b.count);
       return bv - av;
     });
-
-    // top N
     arr = arr.slice(0, n);
 
     if (!arr.length) {
@@ -175,7 +211,6 @@
       return;
     }
 
-    // IMPORTANT: chips show Absences only (no %)
     topStudentList.innerHTML = arr.map(x => {
       const count = Number(x.count ?? 0);
       return `
@@ -185,60 +220,81 @@
         </button>`;
     }).join("");
 
-    // click -> analyze selected student
     topStudentList.querySelectorAll("button[data-sid]").forEach(b => {
       b.addEventListener("click", () => {
         if (studentSearch) studentSearch.value = b.dataset.label;
-        analyzeStudent(b.dataset.sid, /*autoRenderHeatmap=*/true);
+        analyzeStudent(b.dataset.sid, true);
       });
     });
   }
 
-  // ---- analyze one student (summary + heatmap) ----
-  function analyzeStudent(sid, autoRenderHeatmap = true) {
+  // ---- analyze student ----
+  function analyzeStudent(sid, autoRender = true) {
     if (!sid) sid = sidFromInput();
     if (!sid) {
       studentSelectedNote.textContent = "Pick a student.";
       return;
     }
-
     const picked = (report.student_lookup || []).find(x => x.id === sid);
-    if (picked) {
-      studentSelectedNote.textContent = `Selected: ${picked.label}`;
-    } else {
-      studentSelectedNote.textContent = `Selected: ${sid}`;
-    }
+    studentSelectedNote.textContent = picked ? `Selected: ${picked.label}` : `Selected: ${sid}`;
 
     renderStudentModuleSummary(sid);
 
-    const firstMod = fillHeatmapModuleOptions(sid);
-    if (autoRenderHeatmap && firstMod) {
-      stuModuleForHeatmap.value = firstMod;
-      renderStudentHeatmap(sid, firstMod);
+    const firstModTop = fillModuleSelectForStudent(stuModuleForHeatmap, sid, false);
+    fillModuleSelectForStudent(hmModule, sid, true);
+    fillWeeks(hmFrom);
+    fillWeeks(hmTo);
+
+    if (autoRender) {
+      // default: if user hasn’t chosen, render first module only
+      if (firstModTop) {
+        renderStudentHeatmapRows(sid, [firstModTop]);
+      }
     }
   }
 
-  // ------- behaviors -------
+  // ------- events -------
   renderTopList();
   renderTopListBtn?.addEventListener("click", (e) => { e.preventDefault(); renderTopList(); });
-
-  [topModuleSelect, topQualSelect, topNStudent, topBasis, rateBand].forEach(el => {
-    el?.addEventListener("change", renderTopList);
-  });
+  [topModuleSelect, topQualSelect, topNStudent, topBasis, rateBand].forEach(el => el?.addEventListener("change", renderTopList));
 
   analyzeStudentBtn?.addEventListener("click", (e) => { e.preventDefault(); analyzeStudent(); });
+
+  // legacy single render
   renderStudentHeatmapBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     const sid = sidFromInput();
-    if (!sid) {
-      studentSelectedNote.textContent = "Pick a student first.";
+    if (!sid) { studentSelectedNote.textContent = "Pick a student first."; return; }
+    const mod = stuModuleForHeatmap.value || "";
+    if (!mod) { stuHeatmapWrap.innerHTML = `<p class="muted tiny">Pick a module.</p>`; return; }
+    renderStudentHeatmapRows(sid, [mod]);
+  });
+
+  // inline multi render
+  hmRender?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const sid = sidFromInput();
+    if (!sid) { studentSelectedNote.textContent = "Pick a student first."; return; }
+
+    const sel = Array.from(hmModule?.selectedOptions || []).map(o => o.value);
+    let modules = sel;
+
+    // "(All modules)"
+    if (modules.includes("__ALL__")) {
+      const modMap = (report.ps_week_module_att && report.ps_week_module_att[sid]) || {};
+      modules = Object.keys(modMap).sort((a,b)=>a.localeCompare(b));
+    }
+
+    if (!modules.length) {
+      stuHeatmapWrap.innerHTML = `<p class="muted tiny">Pick at least one module.</p>`;
       return;
     }
-    let mod = stuModuleForHeatmap.value || "";
-    if (!mod) {
-      mod = fillHeatmapModuleOptions(sid);
-      if (mod) stuModuleForHeatmap.value = mod;
+    if (modules.length > 3) {
+      modules = modules.slice(0, 3); // cap to 3 for readability
     }
-    renderStudentHeatmap(sid, mod);
+
+    const from = hmFrom.value || "";
+    const to = hmTo.value || "";
+    renderStudentHeatmapRows(sid, modules, from, to);
   });
 })();
