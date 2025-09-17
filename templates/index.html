@@ -192,6 +192,25 @@
           </select>
         </div>
 
+        <!-- NEW: basis & band -->
+        <div class="filters__group">
+          <label for="topBasis">Basis</label>
+          <select id="topBasis" title="How to select the top students">
+            <option value="count" selected>Total absences</option>
+            <option value="rate">Absence rate (%)</option>
+          </select>
+        </div>
+
+        <div class="filters__group">
+          <label for="rateBand">Rate band</label>
+          <select id="rateBand" title="Filter by absence rate band">
+            <option value="">All</option>
+            <option value="low">Low (0–39%)</option>
+            <option value="moderate">Moderate (40–69%)</option>
+            <option value="high">High (70–100%)</option>
+          </select>
+        </div>
+
         <div class="filters__group">
           <button id="renderTopList" class="btn btn-outline">Refresh list</button>
           <button id="analyzeStudentBtn" class="btn">Analyze selected student</button>
@@ -235,6 +254,13 @@
         <h3 class="card__title">Risk by module (max severity)</h3>
         <div id="stuRiskModuleTable" class="table-wrapper"></div>
       </div>
+    </section>
+
+    <!-- NEW: student modules summary table -->
+    <section class="card" id="stuModSummaryCard">
+      <h3 class="card__title">Student modules summary</h3>
+      <p class="muted tiny">Per-module totals and absence rate (%) for the selected student.</p>
+      <div class="table-wrapper" id="stuModSummaryWrap"></div>
     </section>
 
     <section class="card" id="stuHeatmapCard">
@@ -307,6 +333,7 @@
   {% if report %}
   <script>window.__REPORT__ = {{ report | tojson }};</script>
   {% endif %}
+  <!-- Addon must load BEFORE app.js so it can render chip list etc. -->
   <script src="{{ url_for('static', filename='heatmap-addon.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
