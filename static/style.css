@@ -133,3 +133,14 @@ canvas { display: block; max-width: 100%; }
 .hm-4, .hm-5, .hm-6, .hm-7, .hm-8, .hm-9 { background: color-mix(in hsl, #ef4444 85%, transparent); }
 .hm-cell { text-align:center; font-weight:600; }
 
+.pill.hm-legend { padding: 2px 8px; border-radius: 999px; }
+.hm-0{background:var(--panel-2);}
+.hm-1{background:#5e2231;}  /* low */
+.hm-2{background:#7b2734;}  /* moderate */
+.hm-4{background:#a0333c;}  /* high */
+
+.pill.hm-legend { padding: 2px 8px; border-radius: 999px; }
+.hm-0{background:var(--panel-2);}
+.hm-1{background:#5e2231;}  /* low */
+.hm-2{background:#7b2734;}  /* moderate */
+.hm-4{background:#a0333c;}  /* high */
