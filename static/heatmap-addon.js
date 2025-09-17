@@ -99,7 +99,7 @@
     `;
   }
 
-  // ---- student module summary table ----
+  // ---- student module summary table (uses back-end rates) ----
   function renderStudentModuleSummary(sid) {
     if (!stuModSummaryWrap) return;
     const rows = (report.student_module_summary && report.student_module_summary[sid]) || [];
@@ -131,7 +131,6 @@
   }
 
   function topStudentsData() {
-    // Prefer global_top_students_att (already includes count, rate, qual)
     const base = (report.global_top_students_att || []).slice();
     const mod = topModuleSelect?.value || "";
     if (mod) {
@@ -152,23 +151,23 @@
 
     let arr = topStudentsData();
 
-    // Filter by qualification if chosen (use explicit field or bracket suffix)
+    // filter by qual if chosen
     if (qual) {
-      const rx = new RegExp(`\\[${qual.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\]`);
+      const rx = new RegExp(`\\[${qual.replace(/[.*+?^${}()|[\]\\\\]/g, "\\$&")}\\]`);
       arr = arr.filter(x => (x.qual && x.qual === qual) || rx.test(x.label || ""));
     }
 
-    // Filter by rate band if set
+    // filter by rate band
     arr = arr.filter(x => inBand(x.rate, band));
 
-    // Sort by basis
+    // sort by basis
     arr.sort((a, b) => {
       const av = basis === "rate" ? Number(a.rate) : Number(a.count);
       const bv = basis === "rate" ? Number(b.rate) : Number(b.count);
       return bv - av;
     });
 
-    // Top N
+    // top N
     arr = arr.slice(0, n);
 
     if (!arr.length) {
@@ -176,18 +175,17 @@
       return;
     }
 
+    // IMPORTANT: chips show Absences only (no %)
     topStudentList.innerHTML = arr.map(x => {
       const count = Number(x.count ?? 0);
-      const rate = Number(x.rate ?? 0).toFixed(1);
       return `
         <button class="btn btn-outline" data-sid="${x.id}" data-label="${x.label}" style="margin:4px 6px 0 0;">
           ${x.label}
           <span class="pill" style="margin-left:6px;">Absences: ${count}</span>
-          <span class="pill">Rate: ${rate}%</span>
         </button>`;
     }).join("");
 
-    // Click handler -> analyze this student
+    // click -> analyze selected student
     topStudentList.querySelectorAll("button[data-sid]").forEach(b => {
       b.addEventListener("click", () => {
         if (studentSearch) studentSearch.value = b.dataset.label;
@@ -196,7 +194,7 @@
     });
   }
 
-  // ---- analyze one student (charts + summary + heatmap options) ----
+  // ---- analyze one student (summary + heatmap) ----
   function analyzeStudent(sid, autoRenderHeatmap = true) {
     if (!sid) sid = sidFromInput();
     if (!sid) {
@@ -211,10 +209,8 @@
       studentSelectedNote.textContent = `Selected: ${sid}`;
     }
 
-    // Per-module summary table
     renderStudentModuleSummary(sid);
 
-    // Heatmap module options
     const firstMod = fillHeatmapModuleOptions(sid);
     if (autoRenderHeatmap && firstMod) {
       stuModuleForHeatmap.value = firstMod;
@@ -223,11 +219,14 @@
   }
 
   // ------- behaviors -------
-  analyzeStudentBtn?.addEventListener("click", (e) => {
-    e.preventDefault();
-    analyzeStudent();
+  renderTopList();
+  renderTopListBtn?.addEventListener("click", (e) => { e.preventDefault(); renderTopList(); });
+
+  [topModuleSelect, topQualSelect, topNStudent, topBasis, rateBand].forEach(el => {
+    el?.addEventListener("change", renderTopList);
   });
 
+  analyzeStudentBtn?.addEventListener("click", (e) => { e.preventDefault(); analyzeStudent(); });
   renderStudentHeatmapBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     const sid = sidFromInput();
@@ -241,14 +240,5 @@
       if (mod) stuModuleForHeatmap.value = mod;
     }
     renderStudentHeatmap(sid, mod);
-  });
-
-  // Top list initial render + refresh on button
-  renderTopList();
-  renderTopListBtn?.addEventListener("click", (e) => { e.preventDefault(); renderTopList(); });
-
-  // Also refresh automatically when selectors change (nice UX)
-  [topModuleSelect, topQualSelect, topNStudent, topBasis, rateBand].forEach(el => {
-    el?.addEventListener("change", renderTopList);
   });
 })();
