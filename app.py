@@ -109,6 +109,7 @@ def build_report(df: pd.DataFrame) -> dict:
     col_reason  = next((c for c in df.columns if "reason" in c.lower()), None)
     col_risk    = next((c for c in df.columns if "risk" in c.lower()), None)
     col_resolved= next((c for c in df.columns if "resolved" in c.lower()), None)
+    col_interv = next((c for c in df.columns if "intervention" in c.lower()), None)
     col_qual    = next((c for c in df.columns if ("qual" in c.lower()
                                                   or "program" in c.lower()
                                                   or "programme" in c.lower()
@@ -161,7 +162,15 @@ def build_report(df: pd.DataFrame) -> dict:
 
     # globals
     risk_counts     = _counts(df[col_risk].value_counts(dropna=False)) if col_risk else {}
-    resolved_counts = _counts(df[col_resolved].value_counts(dropna=False)) if col_resolved else {}
+    # Resolved status via Intervention non-empty
+    if "col_interv" in locals() and col_interv:
+        vals = df[col_interv].astype(str).str.strip()
+        yes = int(vals.replace({"": pd.NA, "nan": pd.NA}).notna().sum())
+        no = int(len(vals) - yes)
+        resolved = {"Yes": yes, "No": no}
+        resolved_counts = resolved
+    else:
+        resolved_counts = _counts(df[col_resolved].value_counts(dropna=False)) if col_resolved else {}
     by_reason       = _counts(df[col_reason].value_counts().head(15)) if col_reason else {}
 
     weeks   = _sort_weeks_like(df[col_week].dropna().unique()) if col_week else []
@@ -211,9 +220,13 @@ def build_report(df: pd.DataFrame) -> dict:
 
     # resolved rate by week (%)
     resolved_rate = {}
-    if col_week and col_resolved:
-        vals = df[col_resolved].astype(str).str.strip().str.lower()
-        truthy = vals.isin({"yes", "y", "true", "1", "resolved"})
+    if col_week and (("col_interv" in locals() and col_interv) or col_resolved):
+        if ("col_interv" in locals() and col_interv):
+            vals = df[col_interv].astype(str).str.strip()
+            truthy = vals.replace({"": pd.NA, "nan": pd.NA}).notna()
+        else:
+            vals = df[col_resolved].astype(str).str.strip().str.lower()
+            truthy = vals.isin({"yes", "y", "true", "1", "resolved"})
         grp = df.groupby(col_week)
         totals = grp.size()
         trues = grp.apply(lambda g: int(truthy.loc[g.index].sum()))
