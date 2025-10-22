@@ -74,6 +74,34 @@
   }
 
   // ----- Static charts -----
+  // ----- New: Total absences per module (all rows, not unique students) -----
+  (function renderModuleAbsTotal() {
+    if (!report.by_module_abs_total) return;
+    const resolvedCard = document.getElementById("resolvedRateCard");
+    const target = resolvedCard ? resolvedCard : document.querySelector("main.container");
+    if (!target) return;
+
+    const card = document.createElement("section");
+    card.className = "card";
+    card.id = "moduleAbsTotalCard";
+    card.innerHTML = '<h3 class="card__title">Module absences (total rows)</h3><div class="chart" id="moduleAbsTotalWrap"><canvas id="moduleAbsTotalChart"></canvas></div>';
+
+    if (resolvedCard && resolvedCard.parentNode) {
+      resolvedCard.parentNode.insertBefore(card, resolvedCard.nextSibling);
+    } else {
+      target.appendChild(card);
+    }
+
+    const labels = Object.keys(report.by_module_abs_total || {});
+    const values = Object.values(report.by_module_abs_total || {}).map(v => Number(v));
+    const wrap = document.getElementById("moduleAbsTotalWrap");
+    const ctx  = document.getElementById("moduleAbsTotalChart");
+    if (!labels.length || !wrap || !ctx) return;
+    setDynamicHeight(wrap, labels.length);
+    makeBar(ctx, labels, values, true);
+  })();
+
+
   let moduleChart, riskChart, reasonChart, resolvedChart, weekRiskChart, nonAttendanceChart, resolvedRateChart;
 
   if (report.risk_counts && Object.keys(report.risk_counts).length) {
