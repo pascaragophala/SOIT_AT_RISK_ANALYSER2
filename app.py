@@ -60,46 +60,35 @@ def _strip_obj_cols(df: pd.DataFrame) -> pd.DataFrame:
             df[c].replace({"": pd.NA}, inplace=True)
     return df
 
+
 def clean_dataframe(df: pd.DataFrame):
     # Clean raw Excel into valid records:
     # - Trim column names and string cells
     # - Drop fully-empty rows
-    # - Detect key columns
-    # - Drop rows missing Student Number
-    # - Drop duplicate rows on key subset
+    # - Keep rows even if Student Number is missing (for catalogue parity)
+    # - No deduplication
     stats = {}
     df0 = df.copy()
     df0.columns = [str(c).strip() for c in df0.columns]
     stats["rows_raw"] = int(len(df0))
 
     # Strip whitespace in object columns and normalize blanks to NA
+    def _strip_obj_cols(df_in: pd.DataFrame) -> pd.DataFrame:
+        df_in = df_in.copy()
+        for c in df_in.columns:
+            if pd.api.types.is_object_dtype(df_in[c]):
+                df_in[c] = df_in[c].astype(str).str.strip()
+                df_in[c].replace({"": pd.NA}, inplace=True)
+        return df_in
+
     df1 = _strip_obj_cols(df0)
-    # Drop rows that are entirely empty (all NA after stripping)
     df1 = df1.dropna(how="all")
     stats["rows_after_drop_all_empty"] = int(len(df1))
 
-    # Detect likely columns (same logic as build_report)
-    col_student = next((c for c in df1.columns if c.lower().startswith("student number")), None)
-    col_module  = next((c for c in df1.columns if c.lower().startswith("module")), None)
-    col_week    = next((c for c in df1.columns if c.lower() == "week"), None)
-    col_reason  = next((c for c in df1.columns if "reason" in c.lower()), None)
-    col_risk    = next((c for c in df1.columns if "risk" in c.lower()), None)
-    col_resolved= next((c for c in df1.columns if "resolved" in c.lower()), None)
+    # No dropping based on Student Number
+    stats["dropped_missing_student_number"] = 0
 
-    # Require a Student Number for a row to be considered a valid record
-    if col_student:
-        df1[col_student] = df1[col_student].apply(_sid)
-        df1.loc[df1[col_student] == "", col_student] = pd.NA
-        before = len(df1)
-        df1 = df1.dropna(subset=[col_student])
-        stats["dropped_missing_student_number"] = int(before - len(df1))
-    else:
-        # If no student column, we can't do much – keep df1 as-is
-        stats["dropped_missing_student_number"] = 0
-
-    # Skipping drop of rows missing Module/Week/Reason to preserve raw record counts
-
-        # No deduplication: keep all rows as-is to match Excel "records" count
+    # No deduplication to preserve raw record counts
     stats["dropped_duplicates_full_row"] = 0
 
     stats["rows_final"] = int(len(df1))
@@ -132,7 +121,36 @@ def build_report(df: pd.DataFrame) -> dict:
     else:
         df["_qual"] = "Unknown"
 
-    total_records = int(df[col_student].notna().sum()) if col_student else int(len(df))
+        # Total records: Student Number present OR (Student Name & Module(s) & Week present)
+    col_student = next((c for c in df.columns if c.lower().startswith("student number")), None)
+    col_name    = next((c for c in df.columns if c.lower().startswith("student name")), None)
+    col_module  = next((c for c in df.columns if c.lower().startswith("module")), None)
+    col_week    = next((c for c in df.columns if c.lower() == "week"), None)
+    def _nonempty(s):
+        return s.astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA}).notna()
+    has_sn = _nonempty(df[col_student]) if col_student else pd.Series([False]*len(df))
+    has_triplet = (
+        (_nonempty(df[col_name]) if col_name else False) &
+        (_nonempty(df[col_module]) if col_module else False) &
+        (_nonempty(df[col_week]) if col_week else False)
+    )
+        # Total records: SN present OR (Name & Module & Week present)
+    col_student = next((c for c in df.columns if c.lower().startswith("student number")), None)
+    col_name    = next((c for c in df.columns if c.lower().startswith("student name")), None)
+    col_module  = next((c for c in df.columns if c.lower().startswith("module")), None)
+    col_week    = next((c for c in df.columns if c.lower() == "week"), None)
+    def _nonempty(s):
+        return s.astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA}).notna()
+    has_sn = _nonempty(df[col_student]) if col_student else pd.Series([False]*len(df))
+    has_triplet = (
+        (_nonempty(df[col_name]) if col_name else False) &
+        (_nonempty(df[col_module]) if col_module else False) &
+        (_nonempty(df[col_week]) if col_week else False)
+    )
+    total_records = int((has_sn | has_triplet).sum())
+    unique_students = int(df[col_student].dropna().astype(str).nunique()) if col_student else 0
+
+
     unique_students = int(df[col_student].nunique()) if col_student else None
 
     # non-attendance mask (tolerant)
