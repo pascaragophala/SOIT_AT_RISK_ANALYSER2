@@ -50,8 +50,75 @@ def _sort_weeks_like(weeks) -> list:
     return [w for _, w in sorted(zip(nums, s))]
 
 
+
+# ---------------- cleaning ----------------
+def _strip_obj_cols(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    for c in df.columns:
+        if pd.api.types.is_object_dtype(df[c]):
+            df[c] = df[c].astype(str).str.strip()
+            df[c].replace({"": pd.NA}, inplace=True)
+    return df
+
+def clean_dataframe(df: pd.DataFrame):
+    # Clean raw Excel into valid records:
+    # - Trim column names and string cells
+    # - Drop fully-empty rows
+    # - Detect key columns
+    # - Drop rows missing Student Number
+    # - Drop duplicate rows on key subset
+    stats = {}
+    df0 = df.copy()
+    df0.columns = [str(c).strip() for c in df0.columns]
+    stats["rows_raw"] = int(len(df0))
+
+    # Strip whitespace in object columns and normalize blanks to NA
+    df1 = _strip_obj_cols(df0)
+    # Drop rows that are entirely empty (all NA after stripping)
+    df1 = df1.dropna(how="all")
+    stats["rows_after_drop_all_empty"] = int(len(df1))
+
+    # Detect likely columns (same logic as build_report)
+    col_student = next((c for c in df1.columns if c.lower().startswith("student number")), None)
+    col_module  = next((c for c in df1.columns if c.lower().startswith("module")), None)
+    col_week    = next((c for c in df1.columns if c.lower() == "week"), None)
+    col_reason  = next((c for c in df1.columns if "reason" in c.lower()), None)
+    col_risk    = next((c for c in df1.columns if "risk" in c.lower()), None)
+    col_resolved= next((c for c in df1.columns if "resolved" in c.lower()), None)
+
+    # Require a Student Number for a row to be considered a valid record
+    if col_student:
+        df1[col_student] = df1[col_student].apply(_sid)
+        df1.loc[df1[col_student] == "", col_student] = pd.NA
+        before = len(df1)
+        df1 = df1.dropna(subset=[col_student])
+        stats["dropped_missing_student_number"] = int(before - len(df1))
+    else:
+        # If no student column, we can't do much – keep df1 as-is
+        stats["dropped_missing_student_number"] = 0
+
+    # Optional: drop rows that have neither Module nor Week nor Reason (likely formatting tail)
+    subset_for_valid = [c for c in [col_module, col_week, col_reason] if c]
+    if subset_for_valid:
+        before = len(df1)
+        mask_all_na = df1[subset_for_valid].isna().all(axis=1)
+        df1 = df1.loc[~mask_all_na].copy()
+        stats["dropped_no_module_week_reason"] = int(before - len(df1))
+
+    # De-duplicate exact duplicates across a stable subset
+    dedup_cols = [c for c in [col_student, col_module, col_week, col_reason, col_risk, col_resolved] if c]
+    if dedup_cols:
+        before = len(df1)
+        df1 = df1.drop_duplicates(subset=dedup_cols, keep="first")
+        stats["dropped_duplicates"] = int(before - len(df1))
+
+    stats["rows_final"] = int(len(df1))
+    return df1, stats
+
 # ---------------- core report builder ----------------
 def build_report(df: pd.DataFrame) -> dict:
+    # Clean first
+    df, cleaning_stats = clean_dataframe(df)
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
@@ -75,7 +142,7 @@ def build_report(df: pd.DataFrame) -> dict:
     else:
         df["_qual"] = "Unknown"
 
-    total_records = int(len(df))
+    total_records = int(len(df))  # after cleaning
     unique_students = int(df[col_student].nunique()) if col_student else None
 
     # non-attendance mask (tolerant)
@@ -304,6 +371,7 @@ def build_report(df: pd.DataFrame) -> dict:
     sample_rows = df.head(50).fillna("").to_dict(orient="records")
 
     return {
+        "cleaning_stats": cleaning_stats,
         "total_records": total_records,
         "unique_students": unique_students,
         "risk_counts": risk_counts,
