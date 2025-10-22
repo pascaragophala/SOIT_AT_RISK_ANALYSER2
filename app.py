@@ -97,20 +97,10 @@ def clean_dataframe(df: pd.DataFrame):
         # If no student column, we can't do much – keep df1 as-is
         stats["dropped_missing_student_number"] = 0
 
-    # Optional: drop rows that have neither Module nor Week nor Reason (likely formatting tail)
-    subset_for_valid = [c for c in [col_module, col_week, col_reason] if c]
-    if subset_for_valid:
-        before = len(df1)
-        mask_all_na = df1[subset_for_valid].isna().all(axis=1)
-        df1 = df1.loc[~mask_all_na].copy()
-        stats["dropped_no_module_week_reason"] = int(before - len(df1))
+    # Skipping drop of rows missing Module/Week/Reason to preserve raw record counts
 
-    # De-duplicate exact duplicates across a stable subset
-    dedup_cols = [c for c in [col_student, col_module, col_week, col_reason, col_risk, col_resolved] if c]
-    if dedup_cols:
-        before = len(df1)
-        df1 = df1.drop_duplicates(subset=dedup_cols, keep="first")
-        stats["dropped_duplicates"] = int(before - len(df1))
+        # No deduplication: keep all rows as-is to match Excel "records" count
+    stats["dropped_duplicates_full_row"] = 0
 
     stats["rows_final"] = int(len(df1))
     return df1, stats
@@ -142,7 +132,7 @@ def build_report(df: pd.DataFrame) -> dict:
     else:
         df["_qual"] = "Unknown"
 
-    total_records = int(len(df))  # after cleaning
+    total_records = int(df[col_student].notna().sum()) if col_student else int(len(df))
     unique_students = int(df[col_student].nunique()) if col_student else None
 
     # non-attendance mask (tolerant)
